@@ -11,6 +11,6 @@ public class Token {
 
     @Override
     public String toString() {
-        return String.format("Token[%-12s | Lexema: '%s' | Linha: %d]", type, lexeme, line);
+        return String.format("Token[%-15s | Lexema: '%s' | Linha: %d]", type, lexeme, line);
     }
 }

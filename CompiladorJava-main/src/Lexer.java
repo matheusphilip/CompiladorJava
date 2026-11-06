@@ -56,6 +56,24 @@ public class Lexer {
         return true;
     }
 
+    private void blockComment() {
+        while(!isAtEnd()) {
+            if(peek() == '*' && peekNext() == '/') {
+                advance(); // Consome '*'
+                advance(); // Consome '/'
+                return;
+            }
+            if(peek() == '\n') line++;
+            advance();
+        }
+        System.err.printf("Erro Léxico na linha %d: Comentário em bloco não fechado.%n", line);
+    }
+
+    private char peekNext() {
+        if(current + 1 >= source.length()) return '\0';
+        return source.charAt(current + 1);
+    }
+
     private void scanToken() {
         char c = advance();
 
@@ -66,16 +84,52 @@ public class Lexer {
             case '{': addToken(TokenType.LBRACE); break;
             case '}': addToken(TokenType.RBRACE); break;
             case ';': addToken(TokenType.SEMICOLON); break;
+            case ',': addToken(TokenType.COMMA); break;
             case '+': addToken(TokenType.PLUS); break;
             case '-': addToken(TokenType.MINUS); break;
-            case '*': addToken(TokenType.ASTERISK); break;
-            case '/': addToken(TokenType.SLASH); break;
-            case '\'': addToken(TokenType.QUOTES); break;
-            case '"': addToken(TokenType.DQUOTES); break;
+            case '*': addToken(TokenType.STAR); break;
+            case '%': addToken(TokenType.PERCENT); break;
 
             // Operador que pode ter 1 ou 2 caracteres
-            case '=':
-                addToken(match('=') ? TokenType.EQ : TokenType.ASSIGN);
+            case '=': addToken(match('=') ? TokenType.EQ : TokenType.ASSIGN); break;
+            case '!': addToken(match('=') ? TokenType.EXCLAMATION_EQ : TokenType.EXCLAMATION); break;
+            case '<': addToken(match('=') ? TokenType.LESS_EQ : TokenType.LESS); break;
+            case '>': addToken(match('=') ? TokenType.GREATER_EQ : TokenType.GREATER); break;
+
+            // Operadores lógicos && e ||
+            case '&':
+                if(match('&')) addToken(TokenType.AND);
+                else System.err.printf("Erro Léxico na linha %d: '&' isolado não permitido.%n", line);
+                break;
+            case '|':
+                if(match('|')) addToken(TokenType.OR);
+                else System.err.printf("Erro Léxico na linha %d: '|' isolado não permitido.%n", line);
+                break;
+
+            // Divisão ou Comentários
+            case '/':
+                if(match('/')) {
+                    while(peek() != '\n' && !isAtEnd()) advance();
+
+                    if(peek() == '\n') {
+                        line++;
+                        advance();
+                    }
+
+                } else if(match('*')) {
+                    blockComment();
+                } else {
+                    addToken(TokenType.SLASH);
+                }
+                break;
+
+            // Literais de String
+            case '"':
+                string();
+                break;
+
+            case '\'':
+                charLiteral();
                 break;
 
             // Espaços em branco são ignorados
@@ -110,30 +164,66 @@ public class Lexer {
     }
 
     private void number() {
-        while(isDigit(peek())) {
+        while(isDigit(peek())) advance();
+
+        if(peek() == '.' && isDigit(peekNext())) {
+            advance(); // Consome o ponto
+            while(isDigit(peek())) advance();
+            addToken(TokenType.FLOAT_LITERAL);
+        } else {
+            addToken(TokenType.INT_LITERAL);
+        }
+    }
+
+    private void string() {
+        while(peek() != '"' && !isAtEnd()) {
+            if(peek() == '\n') line++;
             advance();
         }
-        addToken(TokenType.INT_LITERAL);
+
+        if(isAtEnd()) {
+            System.err.printf("Erro Léxico na linha %d: String não fechada.%n", line);
+            return;
+        }
+
+        advance(); // Consome a aspa de fechamento
+
+        String value = source.substring(start + 1, current - 1);
+        tokens.add(new Token(TokenType.STRING_LITERAL, value, line));
+    }
+
+    private void charLiteral() {
+        advance(); // Consome o caractere interno
+
+        if(peek() == '\'') {
+            advance(); // Consome a aspa de fechamento
+            String value = source.substring(start + 1, current - 1);
+            tokens.add(new Token(TokenType.CHAR_LITERAL, value, line));
+        } else {
+            System.err.printf("Erro Léxico na linha %d: Char literal não fechada.%n", line);
+        }
     }
 
     private void identifier() {
-        while(isAlpha(peek()) || isDigit(peek())) {
-            advance();
-        }
+        while(isAlpha(peek()) || isDigit(peek())) advance();
 
         String text = source.substring(start, current);
-
         TokenType type;
+
         switch(text) {
-            case "class": type = TokenType.KW_CLASS; break;
-            case "int": type = TokenType.KW_INT; break;
-            case "string": type = TokenType.KW_STRING; break;
+            case "class":   type = TokenType.KW_CLASS; break;
+            case "int":     type = TokenType.KW_INT; break;
+            case "float":   type = TokenType.KW_FLOAT; break;
+            case "String":  type = TokenType.KW_STRING; break;
             case "boolean": type = TokenType.KW_BOOLEAN; break;
-            case "if": type = TokenType.KW_IF; break;
-            case "else": type = TokenType.KW_ELSE; break;
-            case "while": type = TokenType.KW_WHILE; break;
-            case "return": type = TokenType.KW_RETURN; break;
-            default: type = TokenType.IDENTIFIER; break; // Se não for keyword, é um nome de variável/métodos
+            case "void":    type = TokenType.KW_VOID; break;
+            case "if":      type = TokenType.KW_IF; break;
+            case "else":    type = TokenType.KW_ELSE; break;
+            case "while":   type = TokenType.KW_WHILE; break;
+            case "return":  type = TokenType.KW_RETURN; break;
+            case "true":    type = TokenType.KW_TRUE; break;
+            case "false":   type = TokenType.KW_FALSE; break;
+            default:        type = TokenType.IDENTIFIER; break; // Se não for keyword, é um nome de variável/métodos
         }
 
         addToken(type);
