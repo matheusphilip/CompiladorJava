@@ -1,14 +1,17 @@
 public enum TokenType {
     // Keywords
-    KW_CLASS, KW_INT, KW_FLOAT, KW_STRING, KW_BOOLEAN, KW_VOID, KW_IF, KW_ELSE, KW_WHILE, KW_RETURN, KW_TRUE, KW_FALSE,
+    KW_CLASS, KW_PUBLIC, KW_PRIVATE, KW_STATIC, KW_NEW, KW_INT, KW_FLOAT, KW_DOUBLE, KW_STRING, KW_CHAR, KW_BOOLEAN, KW_VOID, KW_IF, KW_ELSE, KW_WHILE, KW_FOR, KW_RETURN, KW_TRUE, KW_FALSE,
 
     // Simbolos de 1 caractere
     LPAREN, // (
     RPAREN, // )
     LBRACE, // {
     RBRACE, // }
+    LBRACKET, // [
+    RBRACKET, // ]
     SEMICOLON, // ;
     COMMA, // ,
+    DOT, // .
     PLUS, // +
     MINUS, // -
     STAR, // *

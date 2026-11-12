@@ -83,8 +83,11 @@ public class Lexer {
             case ')': addToken(TokenType.RPAREN); break;
             case '{': addToken(TokenType.LBRACE); break;
             case '}': addToken(TokenType.RBRACE); break;
+            case '[': addToken(TokenType.LBRACKET); break;
+            case ']': addToken(TokenType.RBRACKET); break;
             case ';': addToken(TokenType.SEMICOLON); break;
             case ',': addToken(TokenType.COMMA); break;
+            case '.': addToken(TokenType.DOT); break;
             case '+': addToken(TokenType.PLUS); break;
             case '-': addToken(TokenType.MINUS); break;
             case '*': addToken(TokenType.STAR); break;
@@ -212,14 +215,21 @@ public class Lexer {
 
         switch(text) {
             case "class":   type = TokenType.KW_CLASS; break;
+            case "public":  type = TokenType.KW_PUBLIC; break;
+            case "private": type = TokenType.KW_PRIVATE; break;
+            case "static":  type = TokenType.KW_STATIC; break;
+            case "new":     type = TokenType.KW_NEW; break;
             case "int":     type = TokenType.KW_INT; break;
             case "float":   type = TokenType.KW_FLOAT; break;
+            case "double":  type = TokenType.KW_DOUBLE; break;
             case "String":  type = TokenType.KW_STRING; break;
+            case "char":    type = TokenType.KW_CHAR; break;
             case "boolean": type = TokenType.KW_BOOLEAN; break;
             case "void":    type = TokenType.KW_VOID; break;
             case "if":      type = TokenType.KW_IF; break;
             case "else":    type = TokenType.KW_ELSE; break;
             case "while":   type = TokenType.KW_WHILE; break;
+            case "for":     type = TokenType.KW_FOR; break;
             case "return":  type = TokenType.KW_RETURN; break;
             case "true":    type = TokenType.KW_TRUE; break;
             case "false":   type = TokenType.KW_FALSE; break;
