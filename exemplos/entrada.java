@@ -1,17 +1,23 @@
-int a;
-String receba = "abc"; // Comentário
-b = 5;
+int idade;
+idade = 20;
 
-/*
-asasas
-fffff
-a
-""
-*/
-if(b != 2) {
-    int num3 = 10;
-}
+String nome = "Maria";
+char letra = 'A';
+boolean ativo = true;
 
-a = 10 / 2 * 4;
-// Comment 2
-x = a + 5;
+double preco = 10.5;
+
+int resultado = (10 + 5) * 2;
+int negativo = -10;
+int resto = 10 % 3;
+
+nome = "Joao";
+ativo = false;
+
+int a = ;
+int b = 2;
+
+int negativo -10;
+int c = 3;
+
+c = 4

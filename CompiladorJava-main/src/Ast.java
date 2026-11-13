@@ -13,7 +13,6 @@ public final class Ast {
         public final List<Comando> comandos;
 
         public Programa(List<Comando> comandos) {
-            // Cria uma cópia da lista e impede modificações.
             this.comandos = Collections.unmodifiableList(
                     new ArrayList<>(comandos)
             );
@@ -28,20 +27,24 @@ public final class Ast {
     public interface Expressao {
     }
 
-    // Representa a declaração de uma variável.
+    // Representa uma declaração de variável.
     public static final class Declaracao implements Comando {
         public final Token tipo;
         public final Token nome;
         public final Expressao inicializador;
 
-        public Declaracao(Token tipo, Token nome, Expressao inicializador) {
+        public Declaracao(
+                Token tipo,
+                Token nome,
+                Expressao inicializador
+        ) {
             this.tipo = tipo;
             this.nome = nome;
             this.inicializador = inicializador;
         }
     }
 
-    // Representa a atribuição de um valor a uma variável.
+    // Representa uma atribuição.
     public static final class Atribuicao implements Comando {
         public final Token nome;
         public final Expressao valor;
@@ -52,7 +55,7 @@ public final class Ast {
         }
     }
 
-    // Representa uma operação com dois operandos, como 10 + 20.
+    // Representa uma operação com dois operandos.
     public static final class Binaria implements Expressao {
         public final Expressao esquerda;
         public final Token operador;
@@ -69,7 +72,18 @@ public final class Ast {
         }
     }
 
-    // Representa o nome de uma variável usada em uma expressão.
+    // Representa uma operação com um operando, como -10.
+    public static final class Unaria implements Expressao {
+        public final Token operador;
+        public final Expressao direita;
+
+        public Unaria(Token operador, Expressao direita) {
+            this.operador = operador;
+            this.direita = direita;
+        }
+    }
+
+    // Representa o uso de uma variável em uma expressão.
     public static final class Identificador implements Expressao {
         public final Token nome;
 
@@ -78,11 +92,21 @@ public final class Ast {
         }
     }
 
-    // Representa um valor numérico literal, como 10 ou 25.
+    // Representa números inteiros ou decimais.
     public static final class Numero implements Expressao {
         public final Token token;
 
         public Numero(Token token) {
+            this.token = token;
+        }
+    }
+
+    // Representa strings, caracteres e valores booleanos.
+    // O token preserva o tipo para a futura análise semântica.
+    public static final class Literal implements Expressao {
+        public final Token token;
+
+        public Literal(Token token) {
             this.token = token;
         }
     }
