@@ -11,7 +11,7 @@ public abstract class TesteCompleto extends Object implements Runnable {
 
     private static final int CONSTANTE = 42;
     protected volatile double decimal = 3.14;
-    transient float flutuante = 2.5f;
+    transient float flutuante = 2.5;
     byte b = 1;
     short s = 2;
     long l = 1000;
