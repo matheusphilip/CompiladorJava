@@ -8,19 +8,13 @@ import java.util.List;
 
 public class Main {
 
-    // Ponto de entrada do programa.
     public static void main(String[] args) {
-
-        // Usa o arquivo informado nos argumentos ou o arquivo padrão.
         String arquivo = args.length > 0
                 ? args[0]
                 : "exemplos/entrada.java";
 
         try {
-            // Obtém o caminho do arquivo.
             Path caminho = Paths.get(arquivo);
-
-            // Lê o código-fonte usando a codificação UTF-8.
             String codigo = new String(
                     Files.readAllBytes(caminho),
                     StandardCharsets.UTF_8
@@ -32,47 +26,54 @@ public class Main {
             System.out.println("\n--- CÓDIGO FONTE ---");
             System.out.println(codigo);
 
-            // Realiza a análise léxica e identifica os tokens.
+            // 1. Análise léxica.
             Lexer lexer = new Lexer(codigo);
             List<Token> tokens = lexer.scanTokens();
 
             System.out.println("\n--- TOKENS ENCONTRADOS ---");
-
             for (Token token : tokens) {
                 System.out.println(token);
             }
 
-            // Realiza a análise sintática e constrói a AST.
+            // 2. Análise sintática: produz a AST.
             Parser parser = new Parser(tokens);
             Ast.Programa programa = parser.parse();
 
             System.out.println("\n--- ANÁLISE SINTÁTICA ---");
             System.out.println("Análise concluída sem erros sintáticos.");
 
-            // Imprime a Árvore Sintática Abstrata.
             System.out.println("\n--- ÁRVORE SINTÁTICA ABSTRATA ---");
-
             AstPrinter printer = new AstPrinter();
             printer.imprimir(programa);
 
+            // 3. Análise semântica: percorre a AST e consulta a tabela.
+            AnalisadorSemantico semantico = new AnalisadorSemantico();
+            semantico.analisar(programa);
+
+            System.out.println("\n--- ANÁLISE SEMÂNTICA ---");
+            semantico.getTabela().imprimir();
+
+            if (semantico.temErros()) {
+                for (String erro : semantico.getErros()) {
+                    System.err.println(erro);
+                }
+                System.err.println("Análise semântica concluída com erros.");
+            } else {
+                System.out.println("Análise semântica concluída sem erros.");
+            }
+
         } catch (ParseError e) {
-            // Exibe erros encontrados durante a análise sintática.
             System.err.println(e.getMessage());
 
         } catch (IOException e) {
-            // Trata erros ao tentar ler o arquivo.
             System.err.println(
-                    "[ERRO DE LEITURA] Não foi possível ler o arquivo: "
-                            + arquivo
+                    "[ERRO DE LEITURA] Não foi possível ler o arquivo: " + arquivo
             );
-
             System.err.println(e.getMessage());
 
         } catch (InvalidPathException e) {
-            // Trata caminhos de arquivo inválidos.
             System.err.println(
-                    "[ERRO DE CAMINHO] Caminho de arquivo inválido: "
-                            + arquivo
+                    "[ERRO DE CAMINHO] Caminho de arquivo inválido: " + arquivo
             );
         }
     }
