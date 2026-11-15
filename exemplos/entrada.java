@@ -14,10 +14,9 @@ int resto = 10 % 3;
 nome = "Joao";
 ativo = false;
 
-int a = ;
+int a = 3;
 int b = 2;
 
-int negativo -10;
 int c = 3;
 
-c = 4
+c = 4;

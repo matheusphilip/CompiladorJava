@@ -1,37 +1,47 @@
+// Define todos os tipos de tokens reconhecidos pelo Lexer.
 public enum TokenType {
-    // Keywords
-    KW_CLASS, KW_PUBLIC, KW_PRIVATE, KW_STATIC, KW_NEW, KW_INT, KW_FLOAT, KW_DOUBLE, KW_STRING, KW_CHAR, KW_BOOLEAN, KW_VOID, KW_IF, KW_ELSE, KW_WHILE, KW_FOR, KW_RETURN, KW_TRUE, KW_FALSE,
 
-    // Simbolos de 1 caractere
-    LPAREN, // (
-    RPAREN, // )
-    LBRACE, // {
-    RBRACE, // }
-    LBRACKET, // [
-    RBRACKET, // ]
-    SEMICOLON, // ;
-    COMMA, // ,
-    DOT, // .
-    PLUS, // +
-    MINUS, // -
-    STAR, // *
-    SLASH, // /
-    PERCENT, // %
+    // Palavras reservadas da linguagem.
+    KW_CLASS, KW_PUBLIC, KW_PRIVATE, KW_STATIC, KW_NEW,
+    KW_INT, KW_FLOAT, KW_DOUBLE, KW_STRING, KW_CHAR, KW_BOOLEAN,
+    KW_VOID, KW_IF, KW_ELSE, KW_WHILE, KW_FOR, KW_RETURN,
+    KW_TRUE, KW_FALSE,
 
-    // Operadores de 1 ou 2 caracteres
-    ASSIGN, EQ, // = e ==
-    EXCLAMATION, EXCLAMATION_EQ, // ! e !=
-    LESS, LESS_EQ, // < e <=
-    GREATER, GREATER_EQ, // > e >=
-    AND, OR, // && e ||
+    // Símbolos de um caractere.
+    LPAREN,        // (
+    RPAREN,        // )
+    LBRACE,        // {
+    RBRACE,        // }
+    LBRACKET,      // [
+    RBRACKET,      // ]
+    SEMICOLON,     // ;
+    COMMA,         // ,
+    DOT,           // .
+    PLUS,          // +
+    MINUS,         // -
+    STAR,          // *
+    SLASH,         // /
+    PERCENT,       // %
 
-    // Tokens com valores dinâmicos
-    IDENTIFIER, // Nomes de variáveis/métodos
-    INT_LITERAL, // Números
-    FLOAT_LITERAL,
-    STRING_LITERAL,
-    CHAR_LITERAL,
+    // Operadores de um ou dois caracteres.
+    ASSIGN,          // =
+    EQ,              // ==
+    EXCLAMATION,     // !
+    EXCLAMATION_EQ,  // !=
+    LESS,            // <
+    LESS_EQ,         // <=
+    GREATER,         // >
+    GREATER_EQ,      // >=
+    AND,             // &&
+    OR,              // ||
 
-    // Fim do arquivo
+    // Tokens com valores dinâmicos.
+    IDENTIFIER,      // Nomes de variáveis e métodos.
+    INT_LITERAL,     // Números inteiros.
+    FLOAT_LITERAL,   // Números decimais.
+    STRING_LITERAL,  // Textos entre aspas duplas.
+    CHAR_LITERAL,    // Caracteres entre aspas simples.
+
+    // Indica o fim do arquivo.
     EOF
 }

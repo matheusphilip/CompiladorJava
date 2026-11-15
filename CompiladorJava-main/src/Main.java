@@ -6,9 +6,12 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 
+// Classe principal do analisador.
+// Executa a análise léxica, sintática e semântica.
 public class Main {
 
     public static void main(String[] args) {
+        // Usa o arquivo padrão caso nenhum caminho seja informado.
         String arquivo = args.length > 0
                 ? args[0]
                 : "exemplos/entrada.java";
@@ -26,16 +29,17 @@ public class Main {
             System.out.println("\n--- CÓDIGO FONTE ---");
             System.out.println(codigo);
 
-            // 1. Análise léxica.
+            // 1. Análise léxica: transforma o código em tokens.
             Lexer lexer = new Lexer(codigo);
             List<Token> tokens = lexer.scanTokens();
 
             System.out.println("\n--- TOKENS ENCONTRADOS ---");
+
             for (Token token : tokens) {
                 System.out.println(token);
             }
 
-            // 2. Análise sintática: produz a AST.
+            // 2. Análise sintática: transforma os tokens em AST.
             Parser parser = new Parser(tokens);
             Ast.Programa programa = parser.parse();
 
@@ -46,7 +50,7 @@ public class Main {
             AstPrinter printer = new AstPrinter();
             printer.imprimir(programa);
 
-            // 3. Análise semântica: percorre a AST e consulta a tabela.
+            // 3. Análise semântica: valida variáveis e tipos.
             AnalisadorSemantico semantico = new AnalisadorSemantico();
             semantico.analisar(programa);
 
@@ -57,10 +61,20 @@ public class Main {
                 for (String erro : semantico.getErros()) {
                     System.err.println(erro);
                 }
+
                 System.err.println("Análise semântica concluída com erros.");
             } else {
                 System.out.println("Análise semântica concluída sem erros.");
             }
+
+            // 4. Exporta a AST nos formatos JSON e DOT.
+            System.out.println("\n--- AST EM JSON ---");
+            System.out.println(programa.paraJson());
+
+            Files.writeString(Path.of("ast.dot"), programa.paraDot());
+            Files.writeString(Path.of("ast.json"), programa.paraJson());
+
+            System.out.println("\nArquivos 'ast.dot' e 'ast.json' gerados com sucesso.");
 
         } catch (ParseError e) {
             System.err.println(e.getMessage());
