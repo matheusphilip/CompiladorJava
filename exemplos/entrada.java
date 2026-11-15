@@ -1,22 +1,92 @@
-int idade;
-idade = 20;
+package teste.compilador;
 
-String nome = "Maria";
-char letra = 'A';
-boolean ativo = true;
+import java.util.*;
 
-double preco = 10.5;
+// Comentário de linha simples para testar quebra de linha e coluna
+/* Comentário em bloco
+   ocupando múltiplas linhas */
 
-int resultado = (10 + 5) * 2;
-int negativo = -10;
-int resto = 10 % 3;
+@Deprecated
+public abstract class TesteCompleto extends Object implements Runnable {
 
-nome = "Joao";
-ativo = false;
+    private static final int CONSTANTE = 42;
+    protected volatile double decimal = 3.14;
+    transient float flutuante = 2.5f;
+    byte b = 1;
+    short s = 2;
+    long l = 1000;
+    boolean flag = true;
+    String texto = "Teste com \"aspas escapadas\" e \\barra\\";
+    char letra = 'A';
+    char quebra = '\n';
+    char aspaSimples = '\'';
+    Object nulo = null;
+    int _variavel$Valida = 0;
 
-int a = 3;
-int b = 2;
+    public synchronized strictfp void executar(String[] args) throws Exception {
+        int x = 10;
+        x++;
+        x--;
+        x += 5;
+        x -= 2;
+        x *= 3;
+        x /= 2;
+        x %= 4;
 
-int c = 3;
+        // Operadores relacionais, lógicos e ternário
+        boolean condicao = (x == 10 || x != 0) && !(x < 5 || x <= 3 || x > 20 || x >= 15);
+        int ternario = condicao ? 1 : 0;
 
-c = 4;
+        // Operadores bitwise e shift
+        int bits = (5 & 3) | (5 ^ 1) + (~2);
+        bits &= 7;
+        bits |= 1;
+        bits ^= 2;
+        bits = (bits << 2) >> 1;
+        bits = bits >>> 1;
+        bits <<= 1;
+        bits >>= 1;
+        bits >>>= 1;
+
+        // Estruturas de controle
+        if (this instanceof TesteCompleto) {
+            for (int i = 0; i < 10; i++) {
+                if (i == 3) continue;
+                if (i == 8) break;
+            }
+        } else {
+            while (flag) {
+                do {
+                    flag = false;
+                } while (false);
+            }
+        }
+
+        switch (x) {
+            case 1:
+                break;
+            default:
+                return;
+        }
+
+        // Exceções, asserções e referências Java 8+
+        try {
+            assert x >= 0;
+            Runnable r = () -> System.out.println("Lambda");
+            Runnable ref = super::toString;
+            if (nulo == null) {
+                throw new RuntimeException("Erro");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            // Reservadas não usadas do Java
+            // const goto
+        }
+    }
+
+    native void metodoNativo();
+}
+
+interface MinhaInterface {}
+enum MeuEnum { OPCAO_A, OPCAO_B }

@@ -24,12 +24,17 @@ public class Token {
     // Formata o token para exibição no terminal.
     @Override
     public String toString() {
+        String lexemaFormatado = "'" + lexeme
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t") + "'";
+
         return String.format(
-                "Token[%-15s | Lexema: '%s' | Linha: %d | Coluna: %d]",
+                "Token[%-17s | Linha: %-3d | Coluna: %-3d | Lexema: %s]",
                 type,
-                lexeme,
                 line,
-                column
+                column,
+                lexemaFormatado
         );
     }
 }
