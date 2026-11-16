@@ -1,8 +1,5 @@
-// Representa os tipos suportados pelo analisador semântico.
-// O nível numérico é usado para permitir conversões automáticas,
-// como atribuir um int a uma variável float ou double.
+// Tipos suportados pela análise semântica simplificada do projeto.
 public enum Tipo {
-
     INT("int", 1),
     FLOAT("float", 2),
     DOUBLE("double", 3),
@@ -10,10 +7,7 @@ public enum Tipo {
     CHAR("char", 0),
     BOOLEAN("boolean", 0);
 
-    // Nome que será exibido nas mensagens e na tabela de símbolos.
     private final String nome;
-
-    // Nível usado para comparar tipos numéricos.
     private final int nivelNumerico;
 
     Tipo(String nome, int nivelNumerico) {
@@ -21,18 +15,31 @@ public enum Tipo {
         this.nivelNumerico = nivelNumerico;
     }
 
-    // Retorna o nome do tipo.
     public String getNome() {
         return nome;
     }
 
-    // Retorna o nível numérico do tipo.
     public int getNivelNumerico() {
         return nivelNumerico;
     }
 
-    // Informa se o tipo é numérico.
     public boolean ehNumerico() {
-        return this == INT || this == FLOAT || this == DOUBLE;
+        return nivelNumerico > 0;
+    }
+
+    // Converte o token de tipo da declaração para o tipo interno do compilador.
+    public static Tipo deToken(TokenType token) {
+        switch (token) {
+            case KW_INT: return INT;
+            case KW_FLOAT: return FLOAT;
+            case KW_DOUBLE: return DOUBLE;
+            case KW_STRING: return STRING;
+            case KW_CHAR: return CHAR;
+            case KW_BOOLEAN: return BOOLEAN;
+            default:
+                throw new IllegalArgumentException(
+                        "Tipo não suportado pela análise semântica: " + token
+                );
+        }
     }
 }

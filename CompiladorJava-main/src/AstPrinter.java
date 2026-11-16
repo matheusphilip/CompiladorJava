@@ -1,7 +1,6 @@
 // Imprime a AST no terminal em formato de árvore indentada.
 public class AstPrinter {
 
-    // Imprime o programa e percorre todos os seus comandos.
     public void imprimir(Ast.Programa programa) {
         System.out.println("Programa");
 
@@ -11,9 +10,7 @@ public class AstPrinter {
         }
     }
 
-    // Imprime uma declaração ou uma atribuição.
     private void imprimirComando(Ast.Comando comando, String prefixo, boolean ultimo) {
-        // Usa └── no último item e ├── nos anteriores.
         String conector = ultimo ? "└── " : "├── ";
 
         if (comando instanceof Ast.Declaracao declaracao) {
@@ -27,31 +24,36 @@ public class AstPrinter {
             } else {
                 System.out.println(prefixo + "    └── Sem inicializador");
             }
-        }
-
-        if (comando instanceof Ast.Atribuicao atribuicao) {
+        } else if (comando instanceof Ast.Atribuicao atribuicao) {
             System.out.println(prefixo + conector + "Atribuição");
             System.out.println(prefixo + "    ├── Variável: " + atribuicao.nome.lexeme);
             System.out.println(prefixo + "    └── Valor");
             imprimirExpressao(atribuicao.valor, prefixo + "        ", true);
+        } else if (comando instanceof Ast.ChamadaMetodo chamada) {
+            System.out.println(prefixo + conector + "Chamada de método: "
+                    + chamada.nomeCompleto());
+
+            for (int i = 0; i < chamada.argumentos.size(); i++) {
+                boolean ultimoArgumento = i == chamada.argumentos.size() - 1;
+                String prefixoArgumento = prefixo + "        ";
+                System.out.println(prefixo + (ultimoArgumento ? "    └── " : "    ├── ")
+                        + "Argumento " + (i + 1));
+                imprimirExpressao(chamada.argumentos.get(i), prefixoArgumento, true);
+            }
         }
     }
 
-    // Imprime expressões de forma recursiva.
     private void imprimirExpressao(Ast.Expressao expressao, String prefixo, boolean ultimo) {
         String conector = ultimo ? "└── " : "├── ";
 
         if (expressao instanceof Ast.Binaria binaria) {
             System.out.println(prefixo + conector + "Operação binária: "
                     + binaria.operador.lexeme);
-
-            // Imprime primeiro o lado esquerdo e depois o direito.
             imprimirExpressao(binaria.esquerda, prefixo + "    ", false);
             imprimirExpressao(binaria.direita, prefixo + "    ", true);
         } else if (expressao instanceof Ast.Unaria unaria) {
             System.out.println(prefixo + conector + "Operação unária: "
                     + unaria.operador.lexeme);
-
             imprimirExpressao(unaria.direita, prefixo + "    ", true);
         } else if (expressao instanceof Ast.Numero numero) {
             System.out.println(prefixo + conector + "Número: " + numero.token.lexeme);

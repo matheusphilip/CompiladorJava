@@ -1,47 +1,97 @@
-// Representa uma variável registrada na tabela de símbolos.
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+// Uma entrada representa um lexema identificador único.
+// O Lexer adiciona ocorrências; o Parser registra quais ocorrências são declarações.
 public class Simbolo {
 
-    // Nome da variável declarada.
-    private final String nome;
+    // Informações de uma ocorrência em que o Parser reconheceu uma declaração.
+    public static class Declaracao {
+        private final Tipo tipo;
+        private final String categoria;
+        private final Token token;
 
-    // Tipo da variável, como int, String ou boolean.
-    private final Tipo tipo;
+        public Declaracao(Tipo tipo, String categoria, Token token) {
+            this.tipo = tipo;
+            this.categoria = categoria;
+            this.token = token;
+        }
 
-    // Categoria do símbolo. Neste projeto, normalmente é "variável".
-    private final String categoria;
+        public Tipo getTipo() {
+            return tipo;
+        }
 
-    // Linha do código em que a variável foi declarada.
-    private final int linhaDeclaracao;
+        public String getCategoria() {
+            return categoria;
+        }
 
-    public Simbolo(
-            String nome,
-            Tipo tipo,
-            String categoria,
-            int linhaDeclaracao
-    ) {
-        this.nome = nome;
-        this.tipo = tipo;
-        this.categoria = categoria;
-        this.linhaDeclaracao = linhaDeclaracao;
+        public Token getToken() {
+            return token;
+        }
     }
 
-    // Retorna o nome da variável.
+    private final String nome;
+    private final List<Token> ocorrencias = new ArrayList<>();
+    private final List<Declaracao> declaracoes = new ArrayList<>();
+
+    public Simbolo(String nome) {
+        this.nome = nome;
+    }
+
     public String getNome() {
         return nome;
     }
 
-    // Retorna o tipo da variável.
+    // Chamado pelo Lexer para cada ocorrência do identificador.
+    public void registrarOcorrencia(Token token) {
+        ocorrencias.add(token);
+    }
+
+    // Chamado pelo Parser quando confirma uma declaração na gramática.
+    public void registrarDeclaracao(Token token, Tipo tipo, String categoria) {
+        declaracoes.add(new Declaracao(tipo, categoria, token));
+    }
+
+    public List<Token> getOcorrencias() {
+        return Collections.unmodifiableList(ocorrencias);
+    }
+
+    public List<Declaracao> getDeclaracoes() {
+        return Collections.unmodifiableList(declaracoes);
+    }
+
+    public int getQuantidadeOcorrencias() {
+        return ocorrencias.size();
+    }
+
+    public int getQuantidadeDeclaracoes() {
+        return declaracoes.size();
+    }
+
+    public boolean foiDeclarado() {
+        return !declaracoes.isEmpty();
+    }
+
+    // Mantém compatibilidade com a forma anterior de consultar o tipo:
+    // retorna o tipo da primeira declaração, ou null se nunca foi declarado.
     public Tipo getTipo() {
-        return tipo;
+        return declaracoes.isEmpty() ? null : declaracoes.get(0).getTipo();
     }
 
-    // Retorna a categoria do símbolo.
     public String getCategoria() {
-        return categoria;
+        return declaracoes.isEmpty()
+                ? "identificador"
+                : declaracoes.get(0).getCategoria();
     }
 
-    // Retorna a linha em que a variável foi declarada.
     public int getLinhaDeclaracao() {
-        return linhaDeclaracao;
+        return declaracoes.isEmpty()
+                ? -1
+                : declaracoes.get(0).getToken().line;
+    }
+
+    public Declaracao getPrimeiraDeclaracao() {
+        return declaracoes.isEmpty() ? null : declaracoes.get(0);
     }
 }

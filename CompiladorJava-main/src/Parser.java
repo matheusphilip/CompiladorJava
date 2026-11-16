@@ -1,18 +1,24 @@
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
-// Analisa a lista de tokens e constrói a Árvore Sintática Abstrata (AST).
-// Reconhece declarações, atribuições e expressões aritméticas.
+// Analisa os tokens, constrói a AST e tenta recuperar erros sintáticos.
+// A tabela é recebida do Lexer e enriquecida apenas quando uma declaração
+// é reconhecida por completo.
 public class Parser {
 
-    // Lista de tokens produzida pelo Lexer.
     private final List<Token> tokens;
-
-    // Índice do token que está sendo analisado no momento.
+    private final TabelaDeSimbolos tabela;
+    private final List<String> erros = new ArrayList<>();
     private int atual = 0;
 
-    // Recebe a lista de tokens e verifica se ela termina com EOF.
+    // Construtor de compatibilidade: cria a tabela lexical a partir dos tokens.
     public Parser(List<Token> tokens) {
+        this(tokens, criarTabelaLexica(tokens));
+    }
+
+    // Recebe a mesma tabela criada e alimentada pelo Lexer.
+    public Parser(List<Token> tokens, TabelaDeSimbolos tabela) {
         if (tokens == null
                 || tokens.isEmpty()
                 || tokens.get(tokens.size() - 1).type != TokenType.EOF) {
@@ -21,42 +27,59 @@ public class Parser {
             );
         }
 
+        if (tabela == null) {
+            throw new IllegalArgumentException(
+                    "A tabela de símbolos não pode ser nula."
+            );
+        }
+
         this.tokens = tokens;
+        this.tabela = tabela;
     }
 
-    // Percorre todos os tokens e monta a lista de comandos do programa.
-    // Caso encontre um erro, registra a mensagem e tenta recuperar a análise.
+    private static TabelaDeSimbolos criarTabelaLexica(List<Token> tokens) {
+        TabelaDeSimbolos tabela = new TabelaDeSimbolos();
+
+        if (tokens != null) {
+            for (Token token : tokens) {
+                tabela.registrarOcorrencia(token);
+            }
+        }
+
+        return tabela;
+    }
+
+    public TabelaDeSimbolos getTabelaDeSimbolos() {
+        return tabela;
+    }
+
+    // Retorna os erros recuperáveis encontrados durante o parse.
+    public List<String> getErros() {
+        return Collections.unmodifiableList(erros);
+    }
+
+    // Analisa o máximo possível do arquivo e devolve a AST dos comandos
+    // reconhecidos. Erros sintáticos ficam disponíveis em getErros().
     public Ast.Programa parse() {
         List<Ast.Comando> comandos = new ArrayList<>();
-        List<String> erros = new ArrayList<>();
 
-        // Continua enquanto não chegar ao fim do arquivo.
         while (!verificar(TokenType.EOF)) {
-            // Guarda a posição inicial para evitar laço infinito na recuperação.
             int inicioComando = atual;
 
             try {
                 comandos.add(comando());
             } catch (ParseError e) {
-                // Guarda o erro e descarta o restante do comando inválido.
                 erros.add(e.getMessage());
                 sincronizar(inicioComando);
             }
         }
 
-        // Se houve algum erro, impede a devolução de uma AST incompleta.
-        if (!erros.isEmpty()) {
-            throw new ParseError(
-                    String.join(System.lineSeparator(), erros)
-            );
-        }
-
+        // Importante: não lançar ParseError apenas por haver erros recuperáveis.
+        // A AST parcial permite que a tabela e a análise semântica prossigam.
         return new Ast.Programa(comandos);
     }
 
-    // Identifica se o próximo comando é uma declaração ou uma atribuição.
     private Ast.Comando comando() {
-        // Se começar com um tipo, é uma declaração de variável.
         if (corresponder(
                 TokenType.KW_INT,
                 TokenType.KW_FLOAT,
@@ -68,94 +91,147 @@ public class Parser {
             return declaracao(anterior());
         }
 
-        // Se começar com um identificador, pode ser uma atribuição.
         if (verificar(TokenType.IDENTIFIER)) {
-            return atribuicao();
+            return comandoIdentificador();
+        }
+
+        throw erro(espiar(), "Esperado uma declaração ou uma atribuição.");
+    }
+
+    // Distingue atribuições de chamadas de método iniciadas por identificador.
+    // Exemplos: idade = 20; e System.out.println("Olá");
+    private Ast.Comando comandoIdentificador() {
+        Token primeiro = consumir(
+                TokenType.IDENTIFIER,
+                "Esperado um identificador."
+        );
+
+        List<Token> caminho = new ArrayList<>();
+        caminho.add(primeiro);
+
+        // Reconhece acessos encadeados: System.out.println
+        while (corresponder(TokenType.DOT)) {
+            caminho.add(consumir(
+                    TokenType.IDENTIFIER,
+                    "Esperado um identificador após '.'."
+            ));
+        }
+
+        // Uma sequência terminada em '(' representa uma chamada de método.
+        if (corresponder(TokenType.LPAREN)) {
+            List<Ast.Expressao> argumentos = new ArrayList<>();
+
+            if (!verificar(TokenType.RPAREN)) {
+                do {
+                    argumentos.add(expressao());
+                } while (corresponder(TokenType.COMMA));
+            }
+
+            consumir(TokenType.RPAREN, "Esperado ')' após os argumentos do método.");
+            consumirTerminador("chamada de método");
+
+            return new Ast.ChamadaMetodo(caminho, argumentos);
+        }
+
+        // Atribuições continuam aceitando somente um identificador simples.
+        if (caminho.size() == 1 && corresponder(TokenType.ASSIGN)) {
+            Ast.Expressao valor = expressao();
+            consumirTerminador("atribuição");
+            return new Ast.Atribuicao(primeiro, valor);
+        }
+
+        if (caminho.size() > 1) {
+            throw erro(
+                    espiar(),
+                    "Esperado '(' para iniciar a chamada do método após '"
+                            + caminho.get(caminho.size() - 1).lexeme + "'."
+            );
         }
 
         throw erro(
                 espiar(),
-                "Esperado uma declaração ou uma atribuição."
+                "Esperado '=' para atribuição ou '(' para chamada de método."
         );
     }
 
-    // Analisa declarações com ou sem inicialização.
-    // Exemplos: int idade; e int idade = 20;
+    // Reconhece: tipo identificador [= expressão] ;
     private Ast.Declaracao declaracao(Token tipo) {
-        // Exige o nome da variável após o tipo.
         Token nome = consumir(
                 TokenType.IDENTIFIER,
-                "Esperado nome da variável após '"
-                        + tipo.lexeme + "'."
+                "Esperado nome da variável após '" + tipo.lexeme + "'."
         );
 
         Ast.Expressao inicializador = null;
 
-        // Se houver '=', analisa a expressão inicializadora.
         if (corresponder(TokenType.ASSIGN)) {
             inicializador = expressao();
         } else if (!verificar(TokenType.SEMICOLON)) {
-            // Detecta casos como: int negativo -10;
             throw erro(
                     espiar(),
-                    "Esperado '=' para inicializar a variável "
-                            + "ou ';' para encerrar a declaração."
+                    "Esperado '=' para inicializar a variável ou ';' para encerrar a declaração."
             );
         }
 
-        // Exige o ponto e vírgula que encerra a declaração.
-        consumir(
-                TokenType.SEMICOLON,
-                "Esperado ';' após declaração."
-        );
+        consumirTerminador("declaração");
+
+        // A declaração é registrada somente depois que sua estrutura foi
+        // reconhecida ou recuperada por inserção do ';'.
+        tabela.registrarDeclaracao(nome, Tipo.deToken(tipo.type), "variável");
 
         return new Ast.Declaracao(tipo, nome, inicializador);
     }
 
-    // Analisa uma atribuição, como: idade = 20;
+    // Reconhece: identificador = expressão ;
     private Ast.Atribuicao atribuicao() {
-        // Exige a variável que receberá o valor.
-        Token nome = consumir(
-                TokenType.IDENTIFIER,
-                "Esperado nome da variável."
-        );
+        Token nome = consumir(TokenType.IDENTIFIER, "Esperado nome da variável.");
+        consumir(TokenType.ASSIGN, "Esperado '=' após o nome da variável.");
 
-        // Exige o operador de atribuição.
-        consumir(
-                TokenType.ASSIGN,
-                "Esperado '=' após o nome da variável."
-        );
-
-        // Analisa a expressão que será atribuída.
         Ast.Expressao valor = expressao();
-
-        // Exige o ponto e vírgula que encerra a atribuição.
-        consumir(
-                TokenType.SEMICOLON,
-                "Esperado ';' após atribuição."
-        );
+        consumirTerminador("atribuição");
 
         return new Ast.Atribuicao(nome, valor);
     }
 
-    // Analisa soma e subtração.
-    // Esses operadores têm precedência menor que multiplicação e divisão.
+    // Se o ';' estiver ausente antes de EOF ou de um novo comando reconhecível,
+    // aplica recuperação por inserção: considera que faltou apenas o terminador.
+    private void consumirTerminador(String nomeComando) {
+        if (corresponder(TokenType.SEMICOLON)) {
+            return;
+        }
+
+        if (verificar(TokenType.EOF)
+                || inicioDeclaracao()
+                || inicioAtribuicao()
+                || inicioChamadaMetodo()) {
+            Token encontrado = espiar();
+            String depois = encontrado.type == TokenType.EOF
+                    ? "fim do arquivo"
+                    : "'" + encontrado.lexeme + "'";
+
+            erros.add(
+                    "[ERRO SINTÁTICO] Linha " + encontrado.line
+                            + ", coluna " + encontrado.column
+                            + ": esperado ';' após " + nomeComando
+                            + ". Recuperação: inserido ';' antes de " + depois + "."
+            );
+            return;
+        }
+
+        throw erro(espiar(), "Esperado ';' após " + nomeComando + ".");
+    }
+
     private Ast.Expressao expressao() {
         Ast.Expressao esquerda = termo();
 
-        // Agrupa operações de mesma precedência da esquerda para a direita.
         while (corresponder(TokenType.PLUS, TokenType.MINUS)) {
             Token operador = anterior();
             Ast.Expressao direita = termo();
-
             esquerda = new Ast.Binaria(esquerda, operador, direita);
         }
 
         return esquerda;
     }
 
-    // Analisa multiplicação, divisão e resto.
-    // Esses operadores têm precedência maior que soma e subtração.
     private Ast.Expressao termo() {
         Ast.Expressao esquerda = unaria();
 
@@ -166,37 +242,27 @@ public class Parser {
         )) {
             Token operador = anterior();
             Ast.Expressao direita = unaria();
-
             esquerda = new Ast.Binaria(esquerda, operador, direita);
         }
 
         return esquerda;
     }
 
-    // Analisa operadores unários.
-    // Exemplos: -10, +5 e -(10 + 5).
     private Ast.Expressao unaria() {
         if (corresponder(TokenType.PLUS, TokenType.MINUS)) {
             Token operador = anterior();
             Ast.Expressao direita = unaria();
-
             return new Ast.Unaria(operador, direita);
         }
 
         return primaria();
     }
 
-    // Reconhece literais, identificadores e expressões entre parênteses.
     private Ast.Expressao primaria() {
-        // Reconhece números inteiros e decimais.
-        if (corresponder(
-                TokenType.INT_LITERAL,
-                TokenType.FLOAT_LITERAL
-        )) {
+        if (corresponder(TokenType.INT_LITERAL, TokenType.FLOAT_LITERAL)) {
             return new Ast.Numero(anterior());
         }
 
-        // Reconhece strings, caracteres e valores booleanos.
         if (corresponder(
                 TokenType.STRING_LITERAL,
                 TokenType.CHAR_LITERAL,
@@ -206,60 +272,42 @@ public class Parser {
             return new Ast.Literal(anterior());
         }
 
-        // Reconhece uma variável usada dentro de uma expressão.
         if (corresponder(TokenType.IDENTIFIER)) {
             return new Ast.Identificador(anterior());
         }
 
-        // Reconhece expressões agrupadas por parênteses.
         if (corresponder(TokenType.LPAREN)) {
-            Ast.Expressao expressao = expressao();
-
-            consumir(
-                    TokenType.RPAREN,
-                    "Esperado ')' para fechar a expressão."
-            );
-
-            return expressao;
+            Ast.Expressao interna = expressao();
+            consumir(TokenType.RPAREN, "Esperado ')' para fechar a expressão.");
+            return interna;
         }
 
         throw erro(
                 espiar(),
-                "Esperado um número, string, caractere, "
-                        + "booleano, identificador ou '('."
+                "Esperado um número, string, caractere, booleano, identificador ou '('."
         );
     }
 
-    // Recupera a análise após encontrar um comando inválido.
-    // Descarta tokens até encontrar um possível início de novo comando.
+    // Recuperação em modo pânico: descarta o comando inválido até encontrar
+    // um ponto e vírgula ou o início provável do próximo comando.
     private void sincronizar(int inicioComando) {
-        // Se nenhum token foi consumido, avança para evitar laço infinito.
         if (atual == inicioComando && !verificar(TokenType.EOF)) {
             avancar();
         }
 
         while (!verificar(TokenType.EOF)) {
-            // Um tipo indica o possível início de uma nova declaração.
-            if (inicioDeclaracao()) {
+            if (inicioDeclaracao() || inicioAtribuicao() || inicioChamadaMetodo()) {
                 return;
             }
 
-            // Um identificador seguido de '=' indica uma atribuição.
-            if (inicioAtribuicao()) {
-                return;
-            }
-
-            // O ponto e vírgula encerra o trecho inválido.
             if (corresponder(TokenType.SEMICOLON)) {
                 return;
             }
 
-            // Descarta tokens que não permitem retomar a análise.
             avancar();
         }
     }
 
-    // Verifica se o token atual pode iniciar uma declaração.
     private boolean inicioDeclaracao() {
         return verificar(TokenType.KW_INT)
                 || verificar(TokenType.KW_FLOAT)
@@ -269,14 +317,37 @@ public class Parser {
                 || verificar(TokenType.KW_BOOLEAN);
     }
 
-    // Verifica se os próximos tokens podem iniciar uma atribuição.
     private boolean inicioAtribuicao() {
         return verificar(TokenType.IDENTIFIER)
                 && atual + 1 < tokens.size()
                 && tokens.get(atual + 1).type == TokenType.ASSIGN;
     }
 
-    // Consome o token atual caso ele corresponda a um dos tipos informados.
+    // Verifica por antecipação se há uma cadeia de membros seguida de '('.
+    // Não altera a posição atual do Parser.
+    private boolean inicioChamadaMetodo() {
+        int indice = atual;
+
+        if (indice >= tokens.size()
+                || tokens.get(indice).type != TokenType.IDENTIFIER) {
+            return false;
+        }
+        indice++;
+
+        while (indice < tokens.size()
+                && tokens.get(indice).type == TokenType.DOT) {
+            indice++;
+            if (indice >= tokens.size()
+                    || tokens.get(indice).type != TokenType.IDENTIFIER) {
+                return false;
+            }
+            indice++;
+        }
+
+        return indice < tokens.size()
+                && tokens.get(indice).type == TokenType.LPAREN;
+    }
+
     private boolean corresponder(TokenType... tipos) {
         for (TokenType tipo : tipos) {
             if (verificar(tipo)) {
@@ -284,59 +355,44 @@ public class Parser {
                 return true;
             }
         }
-
         return false;
     }
 
-    // Exige um token específico ou lança um erro sintático.
     private Token consumir(TokenType tipo, String mensagem) {
         if (verificar(tipo)) {
             return avancar();
         }
-
         throw erro(espiar(), mensagem);
     }
 
-    // Verifica o tipo do token atual sem consumi-lo.
     private boolean verificar(TokenType tipo) {
         return espiar().type == tipo;
     }
 
-    // Retorna o token atual e avança, exceto quando encontra EOF.
     private Token avancar() {
         Token token = espiar();
-
         if (token.type != TokenType.EOF) {
             atual++;
         }
-
         return token;
     }
 
-    // Retorna o token atual sem avançar.
     private Token espiar() {
         return tokens.get(atual);
     }
 
-    // Retorna o último token consumido.
     private Token anterior() {
         return tokens.get(atual - 1);
     }
 
-    // Monta uma mensagem de erro sintático com linha e coluna.
     private ParseError erro(Token token, String mensagem) {
-        String encontrado;
-
-        if (token.type == TokenType.EOF) {
-            encontrado = "fim do arquivo";
-        } else {
-            encontrado = "'" + token.lexeme + "'";
-        }
+        String encontrado = token.type == TokenType.EOF
+                ? "fim do arquivo"
+                : "'" + token.lexeme + "'";
 
         return new ParseError(
                 "[ERRO SINTÁTICO] Linha " + token.line
-                        + ", coluna " + token.column
-                        + ": " + mensagem
+                        + ", coluna " + token.column + ": " + mensagem
                         + " Encontrado: " + encontrado + "."
         );
     }

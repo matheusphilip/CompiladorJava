@@ -1,72 +1,87 @@
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-// Armazena as variáveis declaradas pelo programa.
-// O LinkedHashMap preserva a ordem em que os símbolos foram inseridos.
+// A tabela nasce durante a análise léxica e é enriquecida pelo Parser.
+// Chave: lexema do identificador. Valor: ocorrências e declarações desse nome.
 public class TabelaDeSimbolos {
 
-    // A chave é o nome da variável e o valor é o objeto Simbolo.
     private final Map<String, Simbolo> simbolos = new LinkedHashMap<>();
 
-    // Adiciona uma variável à tabela.
-    // Retorna false caso a variável já tenha sido declarada.
-    public boolean adicionar(Simbolo simbolo) {
-        if (simbolos.containsKey(simbolo.getNome())) {
-            return false;
-        }
-
-        simbolos.put(simbolo.getNome(), simbolo);
-        return true;
+    private Simbolo obterOuCriar(String nome) {
+        return simbolos.computeIfAbsent(nome, Simbolo::new);
     }
 
-    // Procura uma variável pelo nome.
-    // Retorna null caso a variável não exista.
+    // Fase léxica: registra cada ocorrência de um token IDENTIFIER.
+    public void registrarOcorrencia(Token token) {
+        if (token == null || token.type != TokenType.IDENTIFIER) {
+            return;
+        }
+
+        obterOuCriar(token.lexeme).registrarOcorrencia(token);
+    }
+
+    // Fase sintática: informa que uma ocorrência representa uma declaração.
+    public void registrarDeclaracao(Token token, Tipo tipo, String categoria) {
+        if (token == null || token.type != TokenType.IDENTIFIER) {
+            throw new IllegalArgumentException(
+                    "O token informado para declaração deve ser IDENTIFIER."
+            );
+        }
+
+        obterOuCriar(token.lexeme)
+                .registrarDeclaracao(token, tipo, categoria);
+    }
+
+    // Recupera a entrada lexical de um identificador.
+    // Atenção: a existência da entrada não significa que ele foi declarado.
     public Simbolo buscar(String nome) {
         return simbolos.get(nome);
     }
 
-    // Verifica se uma variável já foi declarada.
+    // Indica se o lexema apareceu no código, declarado ou não.
     public boolean existe(String nome) {
         return simbolos.containsKey(nome);
     }
 
-    // Retorna todos os símbolos cadastrados, na ordem de inserção.
     public Collection<Simbolo> todos() {
-        return simbolos.values();
+        return Collections.unmodifiableCollection(simbolos.values());
     }
 
-    // Imprime a tabela de símbolos formatada no terminal.
+    public int tamanho() {
+        return simbolos.size();
+    }
+
+    // Exibe identificadores, tipo conhecido, linha de declaração e ocorrências.
     public void imprimir() {
-        System.out.println("\n========== TABELA DE SÍMBOLOS ==========");
-
-        // Cabeçalho da tabela.
+        System.out.println("\n================ TABELA DE SÍMBOLOS ================");
         System.out.printf(
-                "%-18s | %-10s | %-12s | %-8s%n",
-                "IDENTIFICADOR",
-                "TIPO",
-                "CATEGORIA",
-                "LINHA"
+                "%-18s | %-10s | %-12s | %-8s | %-10s%n",
+                "IDENTIFICADOR", "TIPO", "CATEGORIA", "LINHA", "OCORRÊNCIAS"
         );
+        System.out.println("--------------------------------------------------------------------------");
 
-        System.out.println("------------------------------------------------------");
-
-        // Imprime cada variável declarada.
         for (Simbolo simbolo : simbolos.values()) {
+            String tipo = simbolo.foiDeclarado()
+                    ? simbolo.getTipo().getNome()
+                    : "-";
+            String categoria = simbolo.getCategoria();
+            String linha = simbolo.foiDeclarado()
+                    ? String.valueOf(simbolo.getLinhaDeclaracao())
+                    : "-";
+
             System.out.printf(
-                    "%-18s | %-10s | %-12s | %-8d%n",
-                    simbolo.getNome(),
-                    simbolo.getTipo().getNome(),
-                    simbolo.getCategoria(),
-                    simbolo.getLinhaDeclaracao()
+                    "%-18s | %-10s | %-12s | %-8s | %-10d%n",
+                    simbolo.getNome(), tipo, categoria, linha,
+                    simbolo.getQuantidadeOcorrencias()
             );
         }
 
-        // Mensagem exibida quando nenhuma variável foi declarada.
         if (simbolos.isEmpty()) {
-            System.out.println("Nenhum símbolo declarado.");
+            System.out.println("Nenhum identificador encontrado.");
         }
 
-        System.out.println("========================================\n");
+        System.out.println("====================================================\n");
     }
 }

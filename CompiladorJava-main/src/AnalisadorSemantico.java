@@ -1,41 +1,47 @@
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
-// Percorre a AST e realiza a validação semântica do programa.
-// Verifica declarações duplicadas, variáveis não declaradas,
-// compatibilidade de tipos e operandos numéricos.
+// Percorre a AST e valida declarações, usos de identificadores e tipos.
+// A tabela já foi criada pelo Lexer e complementada pelo Parser.
 public class AnalisadorSemantico {
 
-    // Tabela que guarda as variáveis declaradas pelo programa.
-    private final TabelaDeSimbolos tabela = new TabelaDeSimbolos();
-
-    // Lista que acumula todos os erros semânticos encontrados.
+    private final TabelaDeSimbolos tabela;
     private final List<String> erros = new ArrayList<>();
 
-    // Percorre todos os comandos da AST e analisa cada um deles.
+    // Controla as declarações já encontradas na passagem semântica.
+    // Isso preserva a regra de uso somente depois da declaração.
+    private final Set<String> declaracoesEncontradas = new HashSet<>();
+    private final Set<String> declaracoesConcluidas = new HashSet<>();
+
+    public AnalisadorSemantico(TabelaDeSimbolos tabela) {
+        if (tabela == null) {
+            throw new IllegalArgumentException("A tabela de símbolos não pode ser nula.");
+        }
+        this.tabela = tabela;
+    }
+
+    // Percorre todos os comandos da AST em ordem de ocorrência no programa.
     public void analisar(Ast.Programa programa) {
         for (Ast.Comando comando : programa.comandos) {
             analisarComando(comando);
         }
     }
 
-    // Permite que o Main acesse a tabela de símbolos preenchida.
     public TabelaDeSimbolos getTabela() {
         return tabela;
     }
 
-    // Retorna a lista de erros semânticos sem permitir alterações externas.
     public List<String> getErros() {
         return Collections.unmodifiableList(erros);
     }
 
-    // Informa se foi encontrado pelo menos um erro semântico.
     public boolean temErros() {
         return !erros.isEmpty();
     }
 
-    // Identifica o tipo do comando e chama a análise correspondente.
     private void analisarComando(Ast.Comando comando) {
         if (comando instanceof Ast.Declaracao) {
             analisarDeclaracao((Ast.Declaracao) comando);
@@ -47,7 +53,11 @@ public class AnalisadorSemantico {
             return;
         }
 
-        // Proteção para caso a AST receba um novo tipo de comando no futuro.
+        if (comando instanceof Ast.ChamadaMetodo) {
+            analisarChamadaMetodo((Ast.ChamadaMetodo) comando);
+            return;
+        }
+
         throw new IllegalArgumentException(
                 "Comando não suportado pelo analisador semântico."
         );
@@ -56,27 +66,34 @@ public class AnalisadorSemantico {
     // Analisa declarações como: int idade = 20;
     private void analisarDeclaracao(Ast.Declaracao declaracao) {
         String nome = declaracao.nome.lexeme;
-        Tipo tipoDeclarado = converterTipo(declaracao.tipo);
+        Tipo tipoDeclarado = Tipo.deToken(declaracao.tipo.type);
 
-        // Impede a declaração duplicada da mesma variável.
-        if (tabela.existe(nome)) {
-            Simbolo anterior = tabela.buscar(nome);
+        // A tabela foi pré-preenchida, portanto a duplicidade é controlada
+        // pela ordem dos comandos percorridos nesta passagem.
+        if (!declaracoesEncontradas.add(nome)) {
+            Simbolo simbolo = tabela.buscar(nome);
+            int linhaAnterior = simbolo != null
+                    ? simbolo.getLinhaDeclaracao()
+                    : -1;
 
             erro(
                     declaracao.nome,
-                    "A variável '" + nome + "' já foi declarada na linha "
-                            + anterior.getLinhaDeclaracao() + "."
+                    "A variável '" + nome + "' já foi declarada"
+                            + (linhaAnterior > 0
+                                ? " na linha " + linhaAnterior + "."
+                                : " anteriormente.")
             );
 
-            // Ainda analisa o inicializador para encontrar outros erros.
+            // Percorre o inicializador mesmo em uma declaração duplicada
+            // para encontrar outros usos de identificadores inválidos.
             if (declaracao.inicializador != null) {
                 inferirTipo(declaracao.inicializador);
             }
-
             return;
         }
 
-        // Se houver inicializador, verifica se o tipo é compatível.
+        // A própria variável ainda não está em declaracoesConcluidas.
+        // Assim, uma referência no seu próprio inicializador não é aceita.
         if (declaracao.inicializador != null) {
             Tipo tipoInicializador = inferirTipo(declaracao.inicializador);
 
@@ -92,49 +109,77 @@ public class AnalisadorSemantico {
             }
         }
 
-        // Registra a variável na tabela somente após as verificações.
-        tabela.adicionar(
-                new Simbolo(
-                        nome,
-                        tipoDeclarado,
-                        "variável",
-                        declaracao.nome.line
-                )
-        );
+        // A variável passa a estar disponível para os comandos seguintes,
+        // mesmo se o valor inicial atribuído tiver tipo incompatível.
+        declaracoesConcluidas.add(nome);
+    }
+
+    // Por enquanto, o subconjunto implementado reconhece as duas saídas
+    // padrão de Java: System.out.print(...) e System.out.println(...).
+    private void analisarChamadaMetodo(Ast.ChamadaMetodo chamada) {
+        String nomeMetodo = chamada.nomeCompleto();
+        boolean print = "System.out.print".equals(nomeMetodo);
+        boolean println = "System.out.println".equals(nomeMetodo);
+
+        if (!print && !println) {
+            erro(
+                    chamada.caminho.get(chamada.caminho.size() - 1),
+                    "A chamada de método '" + nomeMetodo
+                            + "' ainda não é suportada pelo compilador."
+            );
+        } else if (print && chamada.argumentos.size() != 1) {
+            erro(
+                    chamada.caminho.get(chamada.caminho.size() - 1),
+                    "System.out.print(...) exige exatamente um argumento."
+            );
+        } else if (println && chamada.argumentos.size() > 1) {
+            erro(
+                    chamada.caminho.get(chamada.caminho.size() - 1),
+                    "System.out.println(...) aceita no máximo um argumento nesta versão."
+            );
+        }
+
+        // Mesmo se a chamada ainda não for suportada, analisa os argumentos
+        // para não ocultar erros de uso de variáveis ou de tipos.
+        for (Ast.Expressao argumento : chamada.argumentos) {
+            inferirTipo(argumento);
+        }
     }
 
     // Analisa atribuições como: idade = 20;
     private void analisarAtribuicao(Ast.Atribuicao atribuicao) {
         String nome = atribuicao.nome.lexeme;
-        Simbolo destino = tabela.buscar(nome);
         Tipo tipoValor = inferirTipo(atribuicao.valor);
 
-        // Verifica se a variável foi declarada antes de ser usada.
-        if (destino == null) {
+        // A existência lexical do nome, sozinha, não significa declaração.
+        if (!declaracoesConcluidas.contains(nome)) {
             erro(
                     atribuicao.nome,
-                    "A variável '" + nome + "' não foi declarada."
+                    "A variável '" + nome + "' não foi declarada antes deste uso."
             );
-
             return;
         }
 
-        // Verifica se o tipo do valor é compatível com o tipo da variável.
+        Simbolo simbolo = tabela.buscar(nome);
+        if (simbolo == null || simbolo.getTipo() == null) {
+            erro(atribuicao.nome, "Não foi possível recuperar o tipo da variável '" + nome + "'.");
+            return;
+        }
+
         if (tipoValor != null
-                && !atribuicaoCompativel(destino.getTipo(), tipoValor)) {
+                && !atribuicaoCompativel(simbolo.getTipo(), tipoValor)) {
             erro(
                     atribuicao.nome,
                     "Não é possível atribuir um valor do tipo '"
                             + tipoValor.getNome() + "' à variável '" + nome
-                            + "' do tipo '" + destino.getTipo().getNome() + "'."
+                            + "' do tipo '" + simbolo.getTipo().getNome() + "'."
             );
         }
     }
 
     // Descobre recursivamente o tipo de cada expressão da AST.
-    // Retorna null quando já foi encontrado um erro na expressão.
+    // Retorna null se a expressão contiver um erro semântico.
     private Tipo inferirTipo(Ast.Expressao expressao) {
-        // Números inteiros e decimais possuem tipos diferentes.
         if (expressao instanceof Ast.Numero) {
             Ast.Numero numero = (Ast.Numero) expressao;
 
@@ -147,7 +192,6 @@ public class AnalisadorSemantico {
             }
         }
 
-        // Reconhece strings, caracteres e valores booleanos.
         if (expressao instanceof Ast.Literal) {
             Ast.Literal literal = (Ast.Literal) expressao;
 
@@ -160,34 +204,37 @@ public class AnalisadorSemantico {
                 case KW_FALSE:
                     return Tipo.BOOLEAN;
                 default:
-                    erro(
-                            literal.token,
-                            "Literal não suportado pelo analisador semântico."
-                    );
-
+                    erro(literal.token, "Literal não suportado pelo analisador semântico.");
                     return null;
             }
         }
 
-        // Consulta a tabela de símbolos para descobrir o tipo da variável.
         if (expressao instanceof Ast.Identificador) {
             Ast.Identificador identificador = (Ast.Identificador) expressao;
-            Simbolo simbolo = tabela.buscar(identificador.nome.lexeme);
+            String nome = identificador.nome.lexeme;
 
-            if (simbolo == null) {
+            // O símbolo pode existir na tabela porque o Lexer viu o lexema.
+            // Só é válido usá-lo se a declaração já tiver sido processada.
+            if (!declaracoesConcluidas.contains(nome)) {
                 erro(
                         identificador.nome,
-                        "A variável '" + identificador.nome.lexeme
-                                + "' não foi declarada."
+                        "A variável '" + nome + "' não foi declarada antes deste uso."
                 );
+                return null;
+            }
 
+            Simbolo simbolo = tabela.buscar(nome);
+            if (simbolo == null || simbolo.getTipo() == null) {
+                erro(
+                        identificador.nome,
+                        "Não foi possível recuperar o tipo da variável '" + nome + "'."
+                );
                 return null;
             }
 
             return simbolo.getTipo();
         }
 
-        // Analisa operações unárias, como -10 e +5.
         if (expressao instanceof Ast.Unaria) {
             Ast.Unaria unaria = (Ast.Unaria) expressao;
             Tipo tipoOperando = inferirTipo(unaria.direita);
@@ -196,7 +243,6 @@ public class AnalisadorSemantico {
                 return null;
             }
 
-            // O operador unário só aceita valores numéricos.
             if (!tipoOperando.ehNumerico()) {
                 erro(
                         unaria.operador,
@@ -204,25 +250,21 @@ public class AnalisadorSemantico {
                                 + "' exige um operando numérico, mas recebeu '"
                                 + tipoOperando.getNome() + "'."
                 );
-
                 return null;
             }
 
             return tipoOperando;
         }
 
-        // Analisa operações binárias, como 10 + 5 e 10 % 3.
         if (expressao instanceof Ast.Binaria) {
             Ast.Binaria binaria = (Ast.Binaria) expressao;
             Tipo tipoEsquerda = inferirTipo(binaria.esquerda);
             Tipo tipoDireita = inferirTipo(binaria.direita);
 
-            // Evita gerar erros em cascata quando um operando já é inválido.
             if (tipoEsquerda == null || tipoDireita == null) {
                 return null;
             }
 
-            // Operações aritméticas exigem dois operandos numéricos.
             if (!tipoEsquerda.ehNumerico() || !tipoDireita.ehNumerico()) {
                 erro(
                         binaria.operador,
@@ -231,11 +273,9 @@ public class AnalisadorSemantico {
                                 + tipoEsquerda.getNome() + "' e '"
                                 + tipoDireita.getNome() + "'."
                 );
-
                 return null;
             }
 
-            // O resultado recebe o tipo numérico de maior nível.
             return promover(tipoEsquerda, tipoDireita);
         }
 
@@ -244,29 +284,6 @@ public class AnalisadorSemantico {
         );
     }
 
-    // Converte o token de tipo declarado para o enum Tipo.
-    private Tipo converterTipo(Token token) {
-        switch (token.type) {
-            case KW_INT:
-                return Tipo.INT;
-            case KW_FLOAT:
-                return Tipo.FLOAT;
-            case KW_DOUBLE:
-                return Tipo.DOUBLE;
-            case KW_STRING:
-                return Tipo.STRING;
-            case KW_CHAR:
-                return Tipo.CHAR;
-            case KW_BOOLEAN:
-                return Tipo.BOOLEAN;
-            default:
-                throw new IllegalArgumentException(
-                        "Tipo de declaração desconhecido: " + token.lexeme
-                );
-        }
-    }
-
-    // Verifica se é possível atribuir o tipo de origem ao tipo de destino.
     // Conversões numéricas crescentes: int -> float -> double.
     private boolean atribuicaoCompativel(Tipo destino, Tipo origem) {
         if (destino == origem) {
@@ -280,19 +297,16 @@ public class AnalisadorSemantico {
         return destino.getNivelNumerico() >= origem.getNivelNumerico();
     }
 
-    // Retorna o tipo numérico de maior nível entre os dois operandos.
     private Tipo promover(Tipo esquerda, Tipo direita) {
         return esquerda.getNivelNumerico() >= direita.getNivelNumerico()
                 ? esquerda
                 : direita;
     }
 
-    // Cria uma mensagem de erro semântico com linha e coluna.
     private void erro(Token token, String mensagem) {
         erros.add(
                 "[ERRO SEMÂNTICO] Linha " + token.line
-                        + ", coluna " + token.column
-                        + ": " + mensagem
+                        + ", coluna " + token.column + ": " + mensagem
         );
     }
 }

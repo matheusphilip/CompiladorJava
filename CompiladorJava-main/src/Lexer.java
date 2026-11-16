@@ -4,25 +4,26 @@ import java.util.List;
 import java.util.Map;
 
 // Analisa o código-fonte caractere por caractere e gera a lista de tokens.
-// Também controla linha e coluna para melhorar as mensagens de erro.
+// Durante essa mesma passagem, registra todas as ocorrências de identificadores.
 public class Lexer {
 
     private final String source;
-
-    // Lista que recebe todos os tokens encontrados.
     private final List<Token> tokens = new ArrayList<>();
 
-    private int start = 0;       // Início do token atual.
-    private int current = 0;     // Posição do caractere sendo analisado.
-    private int line = 1;        // Linha atual.
-    private int column = 1;      // Coluna atual.
-    private int tokenColumn = 1; // Coluna onde o token atual começou.
+    // A tabela é criada junto com o Lexer e preenchida enquanto os tokens são gerados.
+    private final TabelaDeSimbolos tabelaDeSimbolos = new TabelaDeSimbolos();
 
-    // Mapa com todas as palavras reservadas da linguagem.
+    private int start = 0;
+    private int current = 0;
+    private int line = 1;
+    private int column = 1;
+    private int tokenColumn = 1;
+
+    // Mapa das palavras reservadas e seus respectivos tipos de token.
     private static final Map<String, TokenType> KEYWORDS = new HashMap<>();
 
     static {
-        // Tipos primitivos e String
+        // Tipos e palavras reservadas relacionadas.
         KEYWORDS.put("int", TokenType.KW_INT);
         KEYWORDS.put("float", TokenType.KW_FLOAT);
         KEYWORDS.put("double", TokenType.KW_DOUBLE);
@@ -34,7 +35,7 @@ public class Lexer {
         KEYWORDS.put("short", TokenType.KW_SHORT);
         KEYWORDS.put("long", TokenType.KW_LONG);
 
-        // Modificadores de acesso e comportamento
+        // Modificadores de acesso e comportamento.
         KEYWORDS.put("public", TokenType.KW_PUBLIC);
         KEYWORDS.put("private", TokenType.KW_PRIVATE);
         KEYWORDS.put("protected", TokenType.KW_PROTECTED);
@@ -47,7 +48,7 @@ public class Lexer {
         KEYWORDS.put("native", TokenType.KW_NATIVE);
         KEYWORDS.put("strictfp", TokenType.KW_STRICTFP);
 
-        // Estrutura de classes, interfaces e pacotes
+        // Estrutura de classes, interfaces e pacotes.
         KEYWORDS.put("class", TokenType.KW_CLASS);
         KEYWORDS.put("interface", TokenType.KW_INTERFACE);
         KEYWORDS.put("enum", TokenType.KW_ENUM);
@@ -60,7 +61,7 @@ public class Lexer {
         KEYWORDS.put("super", TokenType.KW_SUPER);
         KEYWORDS.put("instanceof", TokenType.KW_INSTANCEOF);
 
-        // Controle de fluxo
+        // Controle de fluxo.
         KEYWORDS.put("return", TokenType.KW_RETURN);
         KEYWORDS.put("if", TokenType.KW_IF);
         KEYWORDS.put("else", TokenType.KW_ELSE);
@@ -73,7 +74,7 @@ public class Lexer {
         KEYWORDS.put("break", TokenType.KW_BREAK);
         KEYWORDS.put("continue", TokenType.KW_CONTINUE);
 
-        // Tratamento de exceções e asserções
+        // Tratamento de exceções e asserções.
         KEYWORDS.put("try", TokenType.KW_TRY);
         KEYWORDS.put("catch", TokenType.KW_CATCH);
         KEYWORDS.put("finally", TokenType.KW_FINALLY);
@@ -81,11 +82,11 @@ public class Lexer {
         KEYWORDS.put("throws", TokenType.KW_THROWS);
         KEYWORDS.put("assert", TokenType.KW_ASSERT);
 
-        // Reservadas não utilizadas
+        // Palavras reservadas não utilizadas pela gramática atual.
         KEYWORDS.put("const", TokenType.KW_CONST);
         KEYWORDS.put("goto", TokenType.KW_GOTO);
 
-        // Literais reservados
+        // Literais reservados.
         KEYWORDS.put("true", TokenType.KW_TRUE);
         KEYWORDS.put("false", TokenType.KW_FALSE);
         KEYWORDS.put("null", TokenType.KW_NULL);
@@ -93,6 +94,11 @@ public class Lexer {
 
     public Lexer(String source) {
         this.source = source;
+    }
+
+    // Expõe a tabela que foi alimentada durante a geração dos tokens.
+    public TabelaDeSimbolos getTabelaDeSimbolos() {
+        return tabelaDeSimbolos;
     }
 
     // Percorre todo o código e adiciona o token EOF no final.
@@ -107,48 +113,47 @@ public class Lexer {
         return tokens;
     }
 
-    // Verifica se o analisador chegou ao final do código.
     private boolean isAtEnd() {
         return current >= source.length();
     }
 
-    // Consome o caractere atual e avança a coluna.
+    // Consome um caractere e avança a coluna.
     private char advance() {
         char caractere = source.charAt(current++);
         column++;
         return caractere;
     }
 
-    // Cria um token comum, usando o texto entre start e current.
+    // Cria o token e, se for um identificador, registra a ocorrência na tabela.
     private void addToken(TokenType type) {
         String text = source.substring(start, current);
-        tokens.add(new Token(type, text, line, tokenColumn));
+        Token token = new Token(type, text, line, tokenColumn);
+        tokens.add(token);
+
+        if (type == TokenType.IDENTIFIER) {
+            tabelaDeSimbolos.registrarOcorrencia(token);
+        }
     }
 
-    // Cria um token com valor próprio, como strings e caracteres.
+    // Cria tokens cujo lexema é armazenado como valor interno (String/char).
     private void addToken(TokenType type, String value) {
         tokens.add(new Token(type, value, line, tokenColumn));
     }
 
-    // Olha o caractere atual sem consumi-lo.
     private char peek() {
         if (isAtEnd()) {
             return '\0';
         }
-
         return source.charAt(current);
     }
 
-    // Olha o próximo caractere sem consumi-lo.
     private char peekNext() {
         if (current + 1 >= source.length()) {
             return '\0';
         }
-
         return source.charAt(current + 1);
     }
 
-    // Consome o próximo caractere apenas se ele for o esperado.
     private boolean match(char expected) {
         if (isAtEnd() || source.charAt(current) != expected) {
             return false;
@@ -184,12 +189,11 @@ public class Lexer {
         );
     }
 
-    // Identifica o tipo de cada símbolo ou palavra do código.
     private void scanToken() {
         char c = advance();
 
         switch (c) {
-            // Símbolos de um caractere
+            // Delimitadores e símbolos.
             case '(': addToken(TokenType.LPAREN); break;
             case ')': addToken(TokenType.RPAREN); break;
             case '{': addToken(TokenType.LBRACE); break;
@@ -207,7 +211,7 @@ public class Lexer {
                 addToken(match(':') ? TokenType.DOUBLE_COLON : TokenType.COLON);
                 break;
 
-            // Aritméticos e atribuições compostas
+            // Operadores aritméticos e atribuições compostas.
             case '+':
                 if (match('+')) {
                     addToken(TokenType.PLUS_PLUS);
@@ -238,7 +242,7 @@ public class Lexer {
                 addToken(match('=') ? TokenType.PERCENT_ASSIGN : TokenType.PERCENT);
                 break;
 
-            // Relacionais e atribuição
+            // Operadores relacionais e atribuição.
             case '=':
                 addToken(match('=') ? TokenType.EQ : TokenType.ASSIGN);
                 break;
@@ -273,7 +277,7 @@ public class Lexer {
                 }
                 break;
 
-            // Lógicos e Bitwise
+            // Operadores lógicos e bit a bit.
             case '&':
                 if (match('&')) {
                     addToken(TokenType.AND);
@@ -298,10 +302,9 @@ public class Lexer {
                 addToken(match('=') ? TokenType.BIT_XOR_ASSIGN : TokenType.BIT_XOR);
                 break;
 
-            // Divisão, atribuição de divisão e comentários
+            // Divisão, atribuição de divisão e comentários.
             case '/':
                 if (match('/')) {
-                    // Comentário de linha: ignora até a quebra de linha.
                     while (peek() != '\n' && !isAtEnd()) {
                         advance();
                     }
@@ -355,12 +358,11 @@ public class Lexer {
         }
     }
 
-    // Verifica se o caractere é um dígito.
     private boolean isDigit(char c) {
         return c >= '0' && c <= '9';
     }
 
-    // Verifica se o caractere pode iniciar um identificador.
+    // Java aceita letras, dígitos, '_' e '$' em identificadores.
     private boolean isAlpha(char c) {
         return (c >= 'a' && c <= 'z')
                 || (c >= 'A' && c <= 'Z')
@@ -368,7 +370,6 @@ public class Lexer {
                 || c == '$';
     }
 
-    // Reconhece números inteiros e decimais.
     private void number() {
         while (isDigit(peek())) {
             advance();
@@ -376,28 +377,26 @@ public class Lexer {
 
         if (peek() == '.' && isDigit(peekNext())) {
             advance();
-
             while (isDigit(peek())) {
                 advance();
             }
-
             addToken(TokenType.FLOAT_LITERAL);
         } else {
             addToken(TokenType.INT_LITERAL);
         }
     }
 
-    // Reconhece strings delimitadas por aspas duplas (com suporte a escape \).
+    // Reconhece strings e permite caracteres escapados com barra invertida.
     private void string() {
         while (peek() != '"' && !isAtEnd()) {
             if (peek() == '\\' && peekNext() != '\0') {
-                advance(); // Consome a barra '\'
+                advance();
                 if (peek() == '\n') {
                     advance();
                     line++;
                     column = 1;
                 } else {
-                    advance(); // Consome o caractere escapado
+                    advance();
                 }
                 continue;
             }
@@ -420,13 +419,12 @@ public class Lexer {
             return;
         }
 
-        advance(); // Consome a aspa de fechamento
-
+        advance();
         String value = source.substring(start + 1, current - 1);
         addToken(TokenType.STRING_LITERAL, value);
     }
 
-    // Reconhece caracteres delimitados por aspas simples (com suporte a escape \).
+    // Reconhece caracteres e escapes simples.
     private void charLiteral() {
         if (isAtEnd() || peek() == '\n' || peek() == '\r') {
             System.err.printf(
@@ -448,17 +446,16 @@ public class Lexer {
         }
 
         if (peek() == '\\') {
-            advance(); // Consome '\'
+            advance();
             if (!isAtEnd() && peek() != '\n' && peek() != '\r') {
-                advance(); // Consome o caractere escapado (ex: 'n', 't', '\'', '\\')
+                advance();
             }
         } else {
-            advance(); // Consome o caractere normal
+            advance();
         }
 
         if (peek() == '\'') {
-            advance(); // Consome a aspa de fechamento
-
+            advance();
             String value = source.substring(start + 1, current - 1);
             addToken(TokenType.CHAR_LITERAL, value);
         } else {
@@ -470,7 +467,7 @@ public class Lexer {
         }
     }
 
-    // Reconhece identificadores e palavras reservadas.
+    // Reconhece palavras reservadas ou registra o texto como IDENTIFIER.
     private void identifier() {
         while (isAlpha(peek()) || isDigit(peek())) {
             advance();
